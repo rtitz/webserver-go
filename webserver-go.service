@@ -1,0 +1,16 @@
+[Unit]
+Description=Webserver Go Service
+ConditionPathExists=/opt/webserver-go
+After=network.target
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/webserver-go
+ExecStart=/opt/webserver-go/bin/webserver-go
+#Restart=on-failure
+Restart=always
+RestartSec=10
+SyslogIdentifier=webserver-go
+[Install]
+WantedBy=multi-user.target
