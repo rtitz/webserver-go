@@ -2,6 +2,7 @@
 
 platforms=( "linux/arm" "linux/arm64" "linux/amd64" "linux/386" )
 
+cd $( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 package_name=$(cd .. && basename $(pwd) && cd - >/dev/null 2>&1)
 #version=$(git tag | tail -n1)
 output_directory="../bin/"
