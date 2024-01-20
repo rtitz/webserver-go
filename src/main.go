@@ -1,36 +1,61 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"webserver-go/variables"
 )
 
+func init() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-c
+		// Run Cleanup
+		slog.Error("Stopping...", "signal", sig)
+		os.Exit(1)
+	}()
+}
+
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	if variables.LogPath != "" {
-		openLogFile(variables.LogPath)
-		fmt.Printf("Logging to %v\n", variables.LogPath)
+	fmt.Println("PID", os.Getpid())
+
+	// Define and check parameters
+	httpPort := flag.Int("port", variables.HttpPortDefault, "Listening TCP Port")
+	logFile := flag.String("log", "", "JSON logfile that is used for logging")
+	flag.Parse()
+	// End of: Define and check parameters
+
+	if *logFile != "" {
+		openLogFile(*logFile)
+		fmt.Printf("Logging to %v\n", *logFile)
+		slog.Info("Starting...")
 	} else {
+		logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
+		slog.SetDefault(logger)
 		fmt.Printf("Logging to console\n")
 	}
 
 	hostname, _ := getHostname()
 	ipAddress, _ := getIp()
 	fmt.Printf("Address: %s (%s)\n", hostname, ipAddress)
+	fmt.Printf("Port: %d\n", *httpPort)
 
 	http.HandleFunc("/", rootHandler)
-
 	http.HandleFunc("/test", testHandler)
 
-	fmt.Printf("Listening on port %v\n", variables.HttpPort)
+	slog.Info("Webserver listening", "port", *httpPort)
 
-	err := http.ListenAndServe(fmt.Sprintf(":%d", variables.HttpPort), logRequest(http.DefaultServeMux))
+	err := http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), logRequest(http.DefaultServeMux))
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }
 
@@ -54,7 +79,9 @@ func getHostname() (string, error) {
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
+		w.WriteHeader(404)
 		fmt.Fprintf(w, variables.NotFound404)
+		//slog.Error("Resquest 404", "RemoteAddr", r.RemoteAddr, "Method", r.Method, "URL", r.URL)
 		return
 	}
 	fmt.Fprintf(w, "<h1>Hello World</h1><div>Try the path /test</div>")
@@ -66,19 +93,21 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 
 func logRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 		handler.ServeHTTP(w, r)
+		if variables.LogRequests {
+			slog.Info("Request", "RemoteAddr", r.RemoteAddr, "Method", r.Method, "URL", r.URL)
+		}
 	})
 }
 
 func openLogFile(logfile string) {
 	if logfile != "" {
 		lf, err := os.OpenFile(logfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0640)
-
 		if err != nil {
-			log.Fatal("OpenLogfile: os.OpenFile:", err)
+			slog.Error("OpenLogfile: os.OpenFile", "ERROR", err)
+			os.Exit(1)
 		}
-
-		log.SetOutput(lf)
+		logger := slog.New(slog.NewJSONHandler(lf, &slog.HandlerOptions{}))
+		slog.SetDefault(logger)
 	}
 }

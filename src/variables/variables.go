@@ -1,11 +1,11 @@
 package variables
 
-var LogPath string
-var HttpPort int
+var HttpPortDefault int
 var NotFound404 string
+var LogRequests bool
 
 func init() {
-	HttpPort = 8081
-	// LogPath = "webserver.log"
+	HttpPortDefault = 8081
 	NotFound404 = "<body><center><b>404<br>Not found!</b></center></body>"
+	LogRequests = true
 }
